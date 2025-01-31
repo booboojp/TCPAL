@@ -1,4 +1,6 @@
 import * as THREE from '/node_modules/three/build/three.module.js';
+import { mock3DArrayExport as mock3DArray } from '../animations/animation.testing.js';
+
 
 
 const scene = new THREE.Scene();
@@ -9,52 +11,83 @@ renderer.setClearColor(0x000000, 0);
 document.getElementById('threejs-container').appendChild(renderer.domElement);
 
 
-const ROTATION_SPEED = 0.02;
-let isRotatingRight = false;
-let isRotatingLeft = false;
 
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowRight') {
-        isRotatingRight = true;
+class Browser {
+    constructor() {
+        this.isWindowFocused = true;
+        this.isRotatingRight = false;
+        this.isRotatingLeft = false;
+        this.ROTATION_SPEED = 0.02;
+
+        this.initEventListeners();
     }
-});
 
-document.addEventListener('keyup', (event) => {
-    if (event.key === 'ArrowRight') {
-        isRotatingRight = false;
+    initEventListeners() {
+        window.addEventListener('blur', () => {
+            this.isWindowFocused = false;
+            this.isRotatingLeft = false;
+            this.isRotatingRight = false;
+        });
+
+
+        window.addEventListener('focus', () => {
+            this.isWindowFocused = true;
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowRight') {
+                this.isRotatingRight = true;
+            }
+            if (event.key === 'ArrowLeft') {
+                this.isRotatingLeft = true;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'ArrowRight') {
+                this.isRotatingRight = false;
+            }
+            if (event.key === 'ArrowLeft') {
+                this.isRotatingLeft = false;
+            }
+        });
     }
-});
-
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') {
-        isRotatingLeft = true;
+    updateCameraRotation(camera, scene) {
+        if (this.isWindowFocused) {
+            if (!(this.isRotatingRight) || !(this.isRotatingLeft)) {
+                if (this.isRotatingRight) {
+                    camera.position.x = camera.position.x * Math.cos(this.ROTATION_SPEED) + camera.position.z * Math.sin(this.ROTATION_SPEED);
+                    camera.position.z = camera.position.z * Math.cos(this.ROTATION_SPEED) - camera.position.x * Math.sin(this.ROTATION_SPEED);
+                    camera.lookAt(scene.position);
+                }
+                if (this.isRotatingLeft) {
+                    camera.position.x = camera.position.x * Math.cos(-this.ROTATION_SPEED) + camera.position.z * Math.sin(-this.ROTATION_SPEED);
+                    camera.position.z = camera.position.z * Math.cos(-this.ROTATION_SPEED) - camera.position.x * Math.sin(-this.ROTATION_SPEED);
+                    camera.lookAt(scene.position);
+                }
+            }
+        }
     }
-});
+}
 
-document.addEventListener('keyup', (event) => {
-    if (event.key === 'ArrowLeft') {
-        isRotatingLeft = false;
-    }
-});
+const browser = new Browser();
 
-const Z_Array_1 = [
-    [1, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7],
-    [2, 0], [2, 1], [2, 2], [1, 3], [2, 4], [2, 5], [2, 6], [2, 7],
-    [3, 0], [3, 1], [3, 2], [3, 3], [3, 4], [3, 5], [3, 6], [3, 7],
-    [5, 0], [5, 1], [5, 2], [5, 3], [5, 4], [5, 5], [5, 6], [5, 7],
-    [7, 0], [7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6], [7, 7]
-];
+
+
 
 let highestX = 0;
 let highestY = 0;
 const pairs = [];
 
-for (const sublist of Z_Array_1) {
-    for (let i = 0; i < sublist.length - 1; i++) {
-        const [x, y] = [sublist[i], sublist[i + 1]];
-        pairs.push([x, y]);
-        highestX = Math.max(highestX, x);
-        highestY = Math.max(highestY, y);
+
+for (const layer of mock3DArray) {
+    for (const sublist of layer) {
+        for (let i = 0; i < sublist.length - 1; i++) {
+            const [x, y] = [sublist[i], sublist[i + 1]];
+            pairs.push([x, y]);
+            highestX = Math.max(highestX, x);
+            highestY = Math.max(highestY, y);
+        }
     }
 }
 
@@ -65,8 +98,8 @@ function create2DArray(highestX, highestY, pairs) {
     }
     return array;
 }
-
 function createCube(x, y, z) {
+    console.log(`Creating cube at x:${x}, y:${y}, z:${z}`);
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshPhongMaterial({ 
         color: 0x0000ff,  
@@ -74,12 +107,45 @@ function createCube(x, y, z) {
         specular: 0x444444 
     });
     const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(x - highestX / 2, 0, y - highestY / 2);
+    cube.position.set(x - highestX / 2, z, y - highestY / 2);
     scene.add(cube);
     return cube;
 }
+function addLayerOutline(layerIndex, highestX, highestY) {
+    let outline;
+    const color = layerIndex === 0 ? 0xffffff : layerIndex === mock3DArray.length - 1 ? 0xffff00 : 0xff00ff;
 
-function createBorder(maxX, maxY) {
+    if (layerIndex === 0 || layerIndex === mock3DArray.length - 1) {
+        const boxGeometry = new THREE.BoxGeometry(highestX + 1, 1, highestY + 1);
+        const edges = new THREE.EdgesGeometry(boxGeometry);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+        outline = new THREE.LineSegments(edges, lineMaterial);
+        outline.position.set(0, layerIndex, 0);
+    } else {
+        const cornerSize = 1;
+        const cornerGeometry = new THREE.BoxGeometry(cornerSize, 1, cornerSize);
+        const edges = new THREE.EdgesGeometry(cornerGeometry);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+
+        outline = new THREE.Group();
+
+        const positions = [
+            { x: -highestX / 2, z: -highestY / 2 },
+            { x: highestX / 2, z: -highestY / 2 },
+            { x: highestX / 2, z: highestY / 2 },
+            { x: -highestX / 2, z: highestY / 2 },
+        ];
+
+        positions.forEach(pos => {
+            const corner = new THREE.LineSegments(edges, lineMaterial);
+            corner.position.set(pos.x, 0, pos.z);
+            outline.add(corner);
+        });
+    }
+
+    scene.add(outline);
+}
+function createBorder(maxX, maxY, layerIndex, totalLayers) {
     const borderMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
     const borderGeometry = new THREE.BoxGeometry(1, 1, 1);
     const borderCubes = [];
@@ -88,33 +154,32 @@ function createBorder(maxX, maxY) {
     const height = maxY + 2;
 
     for(let x = -1; x <= width - 1; x++) {
-        const topCube = new THREE.Mesh(borderGeometry, borderMaterial);
-        topCube.position.set(x - maxX/2, 0, -1 - maxY/2);
-        scene.add(topCube);
-        borderCubes.push(topCube);
-        
-        const bottomCube = new THREE.Mesh(borderGeometry, borderMaterial);
-        bottomCube.position.set(x - maxX/2, 0, height - 1 - maxY/2);
-        scene.add(bottomCube);
-        borderCubes.push(bottomCube);
+        for(let z = -1; z <= height - 1; z++) {
+            if(layerIndex === 0 || layerIndex === totalLayers - 1) {
+                if(x === -1 || x === width -1 || z === -1 || z === height -1) {
+                    const cube = new THREE.Mesh(borderGeometry, borderMaterial);
+                    cube.position.set(x - maxX / 2, layerIndex, z - maxY / 2);
+                    scene.add(cube);
+                    borderCubes.push(cube);
+                }
+            } else {
+                if(
+                    (x === -1 && z === -1) ||
+                    (x === -1 && z === height -1) ||
+                    (x === width -1 && z === -1) ||
+                    (x === width -1 && z === height -1)
+                ) {
+                    const cube = new THREE.Mesh(borderGeometry, borderMaterial);
+                    cube.position.set(x - maxX / 2, layerIndex, z - maxY / 2);
+                    scene.add(cube);
+                    borderCubes.push(cube);
+                }
+            }
+        }
     }
-    
-    for(let y = 0; y < height; y++) {
 
-        const leftCube = new THREE.Mesh(borderGeometry, borderMaterial);
-        leftCube.position.set(-1 - maxX/2, 0, y - maxY/2);
-        scene.add(leftCube);
-        borderCubes.push(leftCube);
-        
-        const rightCube = new THREE.Mesh(borderGeometry, borderMaterial);
-        rightCube.position.set(width - 1 - maxX/2, 0, y - maxY/2);
-        scene.add(rightCube);
-        borderCubes.push(rightCube);
-    }
-    
     return borderCubes;
 }
-
 
 const light = new THREE.PointLight(0xffffff, 10, 100); 
 light.position.set(0, 10, 10); 
@@ -128,90 +193,101 @@ scene.add(ambientLight);
 const light2 = new THREE.PointLight(0xffffff, 8, 100);
 light2.position.set(10, 10, -10);
 scene.add(light2);
-createBorder(highestX, highestY);
 
 
 
-async function fillInArrayWithCubes(highestX, highestY, sourceArray) {
 
-    const path = [];
-    for (let layer = 0; layer <= Math.min(highestX, highestY) / 2; layer++) {
+async function fillInArrayWithCubes(highestX, highestY, mock3DArray) {
+    console.log('fillInArrayWithCubes called');
 
-        for (let x = layer; x <= highestX - layer; x++) {
-            path.push([x, layer]);
+    for (let z = 0; z < mock3DArray.length; z++) {
+        const layerData = mock3DArray[z];
+        console.log(`Animating layer ${z}`);
+
+        const path = [];
+        for (let layer = 0; layer <= Math.min(highestX, highestY) / 2; layer++) {
+
+            for (let x = layer; x <= highestX - layer; x++) {
+                path.push([x, layer]);
+            }
+
+            for (let y = layer + 1; y <= highestY - layer; y++) {
+                path.push([highestX - layer, y]);
+            }
+
+            for (let x = highestX - layer - 1; x >= layer; x--) {
+                path.push([x, highestY - layer]);
+            }
+
+            for (let y = highestY - layer - 1; y > layer; y--) {
+                path.push([layer, y]);
+            }
         }
 
-        for (let y = layer + 1; y <= highestY - layer; y++) {
-            path.push([highestX - layer, y]);
+        for (const [x, y] of path) {
+            console.log(`Animating cube at x:${x}, y:${y}, z:${z}`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const shouldCreateCube = layerData.some(coord => coord[0] === x && coord[1] === y);
+
+            if (shouldCreateCube) {
+                createCube(x, y, z);
+            } else {
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(x - highestX / 2, z, y - highestY / 2);
+                scene.add(cube);
+            }
         }
 
-        for (let x = highestX - layer - 1; x >= layer; x--) {
-            path.push([x, highestY - layer]);
-        }
-
-        for (let y = highestY - layer - 1; y > layer; y--) {
-            path.push([layer, y]);
-        }
+        addLayerOutline(z, highestX, highestY);
     }
 
-
-    const cubeArray = Array(highestY + 1).fill().map(() => Array(highestX + 1).fill(null));
-    
-    for (const [x, y] of path) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        if (sourceArray[y][x] === 1) {
-            cubeArray[y][x] = createCube(x, y, 0);
-        } else {
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
-            const cube = new THREE.Mesh(geometry, material);
-            cube.position.set(x - highestX / 2, 0, y - highestY / 2);
-            scene.add(cube);
-            cubeArray[y][x] = cube;
-        }
-    }
-    
-    return cubeArray;
+    console.log('All layers animated');
 }
 async function visualizeArray() {
+    const totalLayers = mock3DArray.length;
+    mock3DArray.forEach((layer, index) => {
+        let maxX = highestX;
+        let maxY = highestY;
+        createBorder(maxX, maxY, index, totalLayers);
+    });
+    console.log('visualizeArray called');
     const array2D = create2DArray(highestX, highestY, pairs);
-    await fillInArrayWithCubes(highestX, highestY, array2D);
+    await fillInArrayWithCubes(highestX, highestY, mock3DArray);
+    
+    for (let z = 0; z < mock3DArray.length; z++) {
+        const layer = mock3DArray[z];
+        console.log(`Animating layer ${z}`);
+        for (let i = 0; i < layer.length; i++) {
+            const [x, y] = layer[i];
+            if (sourceArray[y][x] === 1) {
+                createCube(x, y, z);
+            } else {
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(x - highestX / 2, z, y - highestY / 2);
+                scene.add(cube);
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
 }
 
-
-camera.position.set(15, 10, 15);  
+camera.position.set(13, 10, 13);  
 camera.lookAt(0, 0, 0);           
 camera.updateProjectionMatrix();
 
 
-let isWindowFocused = true;
 
-window.addEventListener('blur', () => {
-    isWindowFocused = false;
-    isRotatingLeft = false;
-    isRotatingRight = false;
-});
 
-window.addEventListener('focus', () => {
-    isWindowFocused = true;
-});
+
 
 function animate() {
     requestAnimationFrame(animate);
-    if (isWindowFocused) {
-        if (!(isRotatingRight) || !(isRotatingLeft)) {
-            if (isRotatingRight) {
-                camera.position.x = camera.position.x * Math.cos(ROTATION_SPEED) + camera.position.z * Math.sin(ROTATION_SPEED);
-                camera.position.z = camera.position.z * Math.cos(ROTATION_SPEED) - camera.position.x * Math.sin(ROTATION_SPEED);
-                camera.lookAt(scene.position);
-            }
-            if (isRotatingLeft) {
-                camera.position.x = camera.position.x * Math.cos(-ROTATION_SPEED) + camera.position.z * Math.sin(-ROTATION_SPEED);
-                camera.position.z = camera.position.z * Math.cos(-ROTATION_SPEED) - camera.position.x * Math.sin(-ROTATION_SPEED);
-                camera.lookAt(scene.position);
-            }
-        }
-    }
+    browser.updateCameraRotation(camera, scene);
     renderer.render(scene, camera);
 }
 
