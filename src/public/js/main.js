@@ -18,7 +18,7 @@ class Browser {
         this.isWindowFocused = true;
         this.isRotatingRight = false;
         this.isRotatingLeft = false;
-        this.ROTATION_SPEED = 0.02;
+        this.ROTATION_SPEED = 0.05;
 
         this.initEventListeners();
     }
@@ -81,6 +81,11 @@ let highestY = 0;
 const pairs = [];
 
 
+let lowestX = Infinity;
+let lowestY = Infinity;
+
+
+
 for (const layer of mock3DArray) {
     for (const sublist of layer) {
         for (let i = 0; i < sublist.length - 1; i++) {
@@ -88,9 +93,12 @@ for (const layer of mock3DArray) {
             pairs.push([x, y]);
             highestX = Math.max(highestX, x);
             highestY = Math.max(highestY, y);
+            lowestX = Math.min(lowestX, x);
+            lowestY = Math.min(lowestY, y);
         }
     }
 }
+
 
 function create2DArray(highestX, highestY, pairs) {
     const array = Array(highestY + 1).fill().map(() => Array(highestX + 1).fill(0));
@@ -112,66 +120,32 @@ function createCube(x, y, z) {
     scene.add(cube);
     return cube;
 }
-function addLayerOutline(layerIndex, highestX, highestY) {
-    let outline;
-    const color = layerIndex === 0 ? 0xffffff : layerIndex === mock3DArray.length - 1 ? 0xffff00 : 0xff00ff;
-
-    if (layerIndex === 0 || layerIndex === mock3DArray.length - 1) {
-        const boxGeometry = new THREE.BoxGeometry(highestX + 1, 1, highestY + 1);
-        const edges = new THREE.EdgesGeometry(boxGeometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
-        outline = new THREE.LineSegments(edges, lineMaterial);
-        outline.position.set(0, layerIndex, 0);
-    } else {
-        const cornerSize = 1;
-        const cornerGeometry = new THREE.BoxGeometry(cornerSize, 1, cornerSize);
-        const edges = new THREE.EdgesGeometry(cornerGeometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
-
-        outline = new THREE.Group();
-
-        const positions = [
-            { x: -highestX / 2, z: -highestY / 2 },
-            { x: highestX / 2, z: -highestY / 2 },
-            { x: highestX / 2, z: highestY / 2 },
-            { x: -highestX / 2, z: highestY / 2 },
-        ];
-
-        positions.forEach(pos => {
-            const corner = new THREE.LineSegments(edges, lineMaterial);
-            corner.position.set(pos.x, 0, pos.z);
-            outline.add(corner);
-        });
-    }
-
-    scene.add(outline);
-}
 function createBorder(maxX, maxY, layerIndex, totalLayers) {
     const borderMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
     const borderGeometry = new THREE.BoxGeometry(1, 1, 1);
     const borderCubes = [];
     
-    const width = maxX + 2;
-    const height = maxY + 2;
-
-    for(let x = -1; x <= width - 1; x++) {
-        for(let z = -1; z <= height - 1; z++) {
+    const offsetX = (maxX + lowestX) / 2 - 1;
+    const offsetY = (maxY + lowestY) / 2 - 1;
+    const padding = 1;
+    
+    for(let x = lowestX - padding; x <= maxX + padding; x++) {
+        for(let y = lowestY - padding; y <= maxY + padding; y++) {
             if(layerIndex === 0 || layerIndex === totalLayers - 1) {
-                if(x === -1 || x === width -1 || z === -1 || z === height -1) {
+                if(x === lowestX - padding || x === maxX + padding || 
+                   y === lowestY - padding || y === maxY + padding) {
                     const cube = new THREE.Mesh(borderGeometry, borderMaterial);
-                    cube.position.set(x - maxX / 2, layerIndex, z - maxY / 2);
+                    cube.position.set(x - offsetX, layerIndex, y - offsetY);
                     scene.add(cube);
                     borderCubes.push(cube);
                 }
             } else {
-                if(
-                    (x === -1 && z === -1) ||
-                    (x === -1 && z === height -1) ||
-                    (x === width -1 && z === -1) ||
-                    (x === width -1 && z === height -1)
-                ) {
+                if((x === lowestX - padding && y === lowestY - padding) ||
+                   (x === lowestX - padding && y === maxY + padding) ||
+                   (x === maxX + padding && y === lowestY - padding) ||
+                   (x === maxX + padding && y === maxY + padding)) {
                     const cube = new THREE.Mesh(borderGeometry, borderMaterial);
-                    cube.position.set(x - maxX / 2, layerIndex, z - maxY / 2);
+                    cube.position.set(x - offsetX, layerIndex, y - offsetY);
                     scene.add(cube);
                     borderCubes.push(cube);
                 }
@@ -206,22 +180,23 @@ async function fillInArrayWithCubes(highestX, highestY, mock3DArray) {
         console.log(`Animating layer ${z}`);
 
         const path = [];
-        for (let layer = 0; layer <= Math.min(highestX, highestY) / 2; layer++) {
-
-            for (let x = layer; x <= highestX - layer; x++) {
-                path.push([x, layer]);
+        const width = highestX - lowestX;
+        const height = highestY - lowestY;
+        for (let layer = 0; layer <= Math.min(width, height) / 2; layer++) {
+            for (let x = lowestX + layer; x <= highestX - layer; x++) {
+                path.push([x, lowestY + layer]);
             }
 
-            for (let y = layer + 1; y <= highestY - layer; y++) {
+            for (let y = lowestY + layer + 1; y <= highestY - layer; y++) {
                 path.push([highestX - layer, y]);
             }
 
-            for (let x = highestX - layer - 1; x >= layer; x--) {
+            for (let x = highestX - layer - 1; x >= lowestX + layer; x--) {
                 path.push([x, highestY - layer]);
             }
 
-            for (let y = highestY - layer - 1; y > layer; y--) {
-                path.push([layer, y]);
+            for (let y = highestY - layer - 1; y > lowestY + layer; y--) {
+                path.push([lowestX + layer, y]);
             }
         }
 
@@ -242,7 +217,6 @@ async function fillInArrayWithCubes(highestX, highestY, mock3DArray) {
             }
         }
 
-        addLayerOutline(z, highestX, highestY);
     }
 
     console.log('All layers animated');
