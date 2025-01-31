@@ -5,10 +5,11 @@ import { mock3DArrayExport as mock3DArray } from '../animations/animation.testin
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer(   );
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000, 0);
 document.getElementById('threejs-container').appendChild(renderer.domElement);
+const ANIMATION_SPEED = 0;
 
 
 
@@ -226,10 +227,10 @@ async function fillInArrayWithCubes(highestX, highestY, mock3DArray) {
 
         for (const [x, y] of path) {
             console.log(`Animating cube at x:${x}, y:${y}, z:${z}`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-
+            await new Promise(resolve => setTimeout(resolve, ANIMATION_SPEED));
+        
             const shouldCreateCube = layerData.some(coord => coord[0] === x && coord[1] === y);
-
+        
             if (shouldCreateCube) {
                 createCube(x, y, z);
             } else {
